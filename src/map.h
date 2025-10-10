@@ -1253,6 +1253,13 @@ class map
         }
 
         /**
+         * Checks for spawn_rate value for item category of 'itm'.
+         * If spawn_rate is less than 1.0, it will make a random roll (0.1-1.0) to check if the item will have a chance to spawn.
+         * If spawn_rate is more than or equal to 1.0, it will make item spawn that many times (using roll_remainder).
+        */
+        float item_category_spawn_rate( const item &itm );
+
+        /**
          * Place an item on the map, despite the parameter name, this is not necessarily a new item.
          * WARNING: does -not- check volume or stack charges. player functions (drop etc) should use
          * map::add_item_or_charges
@@ -1524,7 +1531,7 @@ class map
 
         // Returns true if terrain at p has NO flag TFLAG_NO_FLOOR,
         // if we're not in z-levels mode or if we're at lowest level
-        bool has_floor( const tripoint &p ) const;
+        bool has_floor( const tripoint &p, bool visible_only = false ) const;
 
         /** Checks if there's a floor between the two tiles. They must be at most 1 tile away from each other in any dimension.
          *  If they're not at the same xy coord there must be floor on both of the relevant tiles
@@ -1833,7 +1840,7 @@ class map
          */
         void set_abs_sub( const tripoint &p );
 
-    private:
+    public:
         field &get_field( const tripoint &p );
 
         /**

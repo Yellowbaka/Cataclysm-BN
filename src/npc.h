@@ -735,7 +735,7 @@ class npc : public player
         npc( const npc & ) = delete;
         npc( npc && ) = delete;
         npc &operator=( const npc & ) = delete;
-        npc &operator=( npc && ) = delete;
+        npc &operator=( npc && ) noexcept;
         ~npc() override;
 
         bool is_player() const override {
@@ -876,6 +876,8 @@ class npc : public player
         void talk_to_u( bool radio_contact = false );
         // Re-roll the inventory of a shopkeeper
         void shop_restock();
+        std::string get_restock_interval() const;
+        bool is_shopkeeper() const;
         // Use and assessment of items
         // The minimum value to want to pick up an item
         int minimum_item_value() const;
@@ -1182,6 +1184,7 @@ class npc : public player
          * Do not use when placing a NPC in mapgen.
          */
         void setpos( const tripoint &pos ) override;
+        void onswapsetpos( const tripoint &pos );
         void travel_overmap( const tripoint &pos );
         npc_attitude get_attitude() const;
         void set_attitude( npc_attitude new_attitude );

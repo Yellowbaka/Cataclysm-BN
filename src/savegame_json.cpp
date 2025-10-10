@@ -228,8 +228,7 @@ void player_activity::deserialize( JsonIn &jsin )
         return;
     }
 
-    const bool has_actor = activity_actors::deserialize_functions.find( type ) !=
-                           activity_actors::deserialize_functions.end();
+    const bool has_actor = activity_actors::deserialize_functions.contains( type );
 
     // Handle migration of pre-activity_actor activities
     // ACT_MIGRATION_CANCEL will clear the backlog and reset npc state
@@ -1006,6 +1005,10 @@ void avatar::store( JsonOut &json ) const
     // misc player specific stuff
     json.member( "focus_pool", focus_pool );
 
+    if( shadow_npc ) {
+        json.member( "shadow_npc", *shadow_npc );
+    }
+
     // stats through kills
     json.member( "str_upgrade", std::abs( str_upgrade ) );
     json.member( "dex_upgrade", std::abs( dex_upgrade ) );
@@ -1040,6 +1043,10 @@ void avatar::store( JsonOut &json ) const
     inv.json_save_invcache( json );
 
     json.member( "preferred_aiming_mode", preferred_aiming_mode );
+
+    json.member( "snippets_read", snippets_read );
+
+    json.member( "known_monsters", known_monsters );
 
     json.member( "faction_warnings" );
     json.start_array();
@@ -1079,6 +1086,11 @@ void avatar::load( const JsonObject &data )
 
     data.read( "focus_pool", focus_pool );
 
+    if( data.has_member( "shadow_npc" ) ) {
+        shadow_npc = std::make_unique<npc>();
+        data.read( "shadow_npc", *shadow_npc );
+    }
+
     // stats through kills
     data.read( "str_upgrade", str_upgrade );
     data.read( "dex_upgrade", dex_upgrade );
@@ -1116,6 +1128,9 @@ void avatar::load( const JsonObject &data )
 
     items_identified.clear();
     data.read( "items_identified", items_identified );
+
+    // Player only, snippets they have read at least once.
+    data.read( "snippets_read", snippets_read );
 
     data.read( "translocators", translocators );
 
@@ -1199,6 +1214,9 @@ void avatar::load( const JsonObject &data )
             warning_record[faction_id( fac_id )] = std::make_pair( warning_num, warning_time );
         }
     }
+
+    // monsters recorded by the character
+    data.read( "known_monsters", known_monsters );
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -1898,7 +1916,7 @@ void monster::load( const JsonObject &data )
     // make sure the loaded monster has every special attack its type says it should have
     for( auto &sa : type->special_attacks ) {
         const std::string &aname = sa.first;
-        if( special_attacks.find( aname ) == special_attacks.end() ) {
+        if( !special_attacks.contains( aname ) ) {
             auto &entry = special_attacks[aname];
             entry.cooldown = rng( 0, sa.second->cooldown );
         }

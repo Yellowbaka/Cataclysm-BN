@@ -1,10 +1,12 @@
 #include "character_functions.h"
 
 #include <algorithm>
+#include <string>
 #include <utility>
 
 #include "ammo.h"
 #include "bionics.h"
+#include "bodypart.h"
 #include "calendar.h"
 #include "character_martial_arts.h"
 #include "character.h"
@@ -27,6 +29,7 @@
 #include "skill.h"
 #include "submap.h"
 #include "trap.h"
+#include "flag_trait.h"
 #include "uistate.h"
 #include "veh_type.h"
 #include "vehicle.h"
@@ -59,6 +62,12 @@ static const trait_flag_str_id trait_flag_PSYCHOPATH( "PSYCHOPATH" );
 static const trait_flag_str_id trait_flag_SAPIOVORE( "SAPIOVORE" );
 static const trait_flag_str_id trait_flag_SPIRITUAL( "SPIRITUAL" );
 
+static const trait_flag_str_id trait_flag_MUTATION_FLIGHT( "MUTATION_FLIGHT" );
+static const trait_flag_str_id trait_flag_FLIGHT_ALWAYS_ACTIVE( "FLIGHT_ALWAYS_ACTIVE" );
+
+const flag_id flag_ALLOWS_FLIGHT( "ALLOWS_FLIGHT" );
+const flag_id flag_ALWAYS_ALLOWS_FLIGHT( "ALWAYS_ALLOWS_FLIGHT" );
+
 static const efftype_id effect_boomered( "boomered" );
 static const efftype_id effect_darkness( "darkness" );
 static const efftype_id effect_meth( "meth" );
@@ -70,6 +79,8 @@ static const itype_id itype_battery( "battery" );
 static const itype_id itype_UPS( "UPS" );
 
 static const skill_id skill_throw( "throw" );
+
+static const quality_id qual_SLEEP_AID( "SLEEP_AID" );
 
 namespace character_funcs
 {
@@ -107,6 +118,49 @@ void siphon( Character &ch, vehicle &veh, const itype_id &desired_liquid )
     } else {
         veh.drain( desired_liquid, qty );
     }
+}
+
+bool can_noclip( const Character &ch )
+{
+    return ch.has_trait( trait_id( "DEBUG_NOCLIP" ) );
+}
+
+bool can_fly( Character &ch )
+{
+
+    // if the player can noclip, flying is technically a part of that
+    if( can_noclip( ch ) ) {
+        return true;
+    }
+
+    for( const auto &w : ch.worn ) {
+        if( ( w->is_active() && w->has_flag( flag_ALLOWS_FLIGHT ) ) ||
+            w->has_flag( flag_ALWAYS_ALLOWS_FLIGHT ) ) {
+            return true;
+        }
+    }
+
+    for( const trait_id &mid : ch.get_mutations() ) {
+        auto it = ch.my_mutations.find( mid->id );
+        if( it != ch.my_mutations.end() ) {
+            if( ( mid->flags.contains( trait_flag_MUTATION_FLIGHT ) && ( can_use_mutation( mid, ch ) &&
+                    it->second.powered ) ) ||  mid->flags.contains( trait_flag_FLIGHT_ALWAYS_ACTIVE ) ) {
+                return true;
+            } else if( ( mid->flags.contains( trait_flag_MUTATION_FLIGHT ) && !can_use_mutation( mid, ch ) &&
+                         it->second.powered ) ) {
+                ch.deactivate_mutation( mid );
+                return false;
+            }
+        }
+    }
+    for( const bionic &bio : *ch.my_bionics ) {
+        if( bio.info().has_flag( flag_id( "BIONIC_FLIGHT" ) ) &&
+            ch.get_power_level() > units::from_kilojoule( 0 ) && bio.powered ) {
+            return true;
+        }
+    }
+
+    return false;
 }
 
 bool is_book_morale_boosted( const Character &ch, const item &book )
@@ -213,7 +267,7 @@ comfort_response_t base_comfort_value( const Character &who, const tripoint &p )
     // As in the latter also checks for fatigue and other variables while this function
     // only looks at the base comfyness of something. It's still subjective, in a sense,
     // as arachnids who sleep in webs will find most places comfortable for instance.
-    int comfort = 0;
+    float comfort = 0.0;
 
     comfort_response_t comfort_response;
 
@@ -224,6 +278,7 @@ comfort_response_t base_comfort_value( const Character &who, const tripoint &p )
                     ( who.has_trait( trait_WEB_WEAVER ) ) );
     bool in_shell = who.has_active_mutation( trait_SHELL2 );
     bool watersleep = who.has_trait( trait_WATERSLEEP );
+    bool music = who.has_active_item_with_action( "MP3_ON" );
 
     map &here = get_map();
     const optional_vpart_position vp = here.veh_at( p );
@@ -245,9 +300,11 @@ comfort_response_t base_comfort_value( const Character &who, const tripoint &p )
             if( carg ) {
                 const vehicle_stack items = vp->vehicle().get_items( carg->part_index() );
                 for( item *items_it : items ) {
-                    if( items_it->has_flag( STATIC( flag_id( "SLEEP_AID" ) ) ) ) {
-                        // Note: BED + SLEEP_AID = 9 pts, or 1 pt below very_comfortable
-                        comfort += 1 + static_cast<int>( comfort_level::slightly_comfortable );
+                    int sleep_quality = items_it->get_quality( qual_SLEEP_AID );
+                    if( sleep_quality >= 0 ) {
+                        // uncomfortable = -7, neutral = 0, comfortable = 5+, very comfortable = 10
+                        // Note: BED + LEVEL 2 SLEEP_AID = 7 pts, or 3 pt below very_comfortable
+                        comfort += sleep_quality;
                         comfort_response.aid.push_back( items_it );
                     }
                 }
@@ -281,13 +338,42 @@ comfort_response_t base_comfort_value( const Character &who, const tripoint &p )
         if( comfort_response.aid.empty() ) {
             const map_stack items = here.i_at( p );
             for( item *items_it : items ) {
-                if( items_it->has_flag( STATIC( flag_id( "SLEEP_AID" ) ) ) ) {
-                    // Note: BED + SLEEP_AID = 9 pts, or 1 pt below very_comfortable
-                    comfort += 1 + static_cast<int>( comfort_level::slightly_comfortable );
+                int sleep_quality = items_it->get_quality( qual_SLEEP_AID );
+                if( sleep_quality >= 0 ) {
+                    // Note: BED + LEVEL 2 SLEEP_AID = 7 pts, or 3 pt below very_comfortable
+                    comfort += sleep_quality;
                     comfort_response.aid.push_back( items_it );
                 }
             }
         }
+        bool skintight_or_naked = true;
+        for( item *it : who.worn ) {
+            if( !it->has_flag( flag_SKINTIGHT ) && !it->has_flag( flag_OVERSIZE ) ) {
+                skintight_or_naked = false;
+            }
+
+            // check wearing bonus (sleep aid clothing is worth double when worn, similar to snuggling)
+            int sleep_quality = it->get_quality( qual_SLEEP_AID );
+            if( sleep_quality >= 0 ) {
+                comfort += sleep_quality;
+                comfort_response.aid.push_back( it );
+            }
+        }
+
+        // bonus if player is wearing only skintight clothing (pajamas/boxers), oversized clothing (big hoodies, blankets, etc) or naked
+        if( skintight_or_naked ) {
+            comfort += 1;
+        }
+
+        // bonus if player is snuggling with a specific item
+        for( item *it : who.wielded_items() ) {
+            if( it->has_quality( qual_SLEEP_AID ) ) {
+                // don't add to the aid array, because we print special mesage here
+                comfort += it->get_quality( qual_SLEEP_AID ) * 2;
+                comfort_response.aid.push_back( it );
+            }
+        }
+
         if( fungaloid_cosplay && here.has_flag_ter_or_furn( "FUNGUS", p ) ) {
             comfort += static_cast<int>( comfort_level::very_comfortable );
         } else if( watersleep && here.has_flag_ter( "SWIMMABLE", p ) ) {
@@ -321,14 +407,17 @@ comfort_response_t base_comfort_value( const Character &who, const tripoint &p )
             comfort = static_cast<int>( comfort_level::impossible );
         }
     }
-
-    if( comfort > static_cast<int>( comfort_level::comfortable ) ) {
+    // If you are listening to music, give a small buff to comfort
+    if( music ) {
+        comfort += 2;
+    }
+    if( comfort >= static_cast<int>( comfort_level::very_comfortable ) ) {
         comfort_response.level = comfort_level::very_comfortable;
-    } else if( comfort > static_cast<int>( comfort_level::slightly_comfortable ) ) {
+    } else if( comfort >= static_cast<int>( comfort_level::comfortable ) ) {
         comfort_response.level = comfort_level::comfortable;
-    } else if( comfort > static_cast<int>( comfort_level::neutral ) ) {
+    } else if( comfort >= static_cast<int>( comfort_level::slightly_comfortable ) ) {
         comfort_response.level = comfort_level::slightly_comfortable;
-    } else if( comfort == static_cast<int>( comfort_level::neutral ) ) {
+    } else if( comfort >= static_cast<int>( comfort_level::neutral ) ) {
         comfort_response.level = comfort_level::neutral;
     } else {
         comfort_response.level = comfort_level::uncomfortable;
@@ -381,6 +470,18 @@ int rate_sleep_spot( const Character &who, const tripoint &p )
     } else {
         // Make it harder for insomniac to get around the trait
         sleepy -= current_stim;
+    }
+
+    if( one_in( 3 ) ) {
+        if( comfort_info.level >= comfort_level::very_comfortable ) {
+            who.add_msg_if_player( "You feel very comfortable." );
+        } else if( comfort_info.level >= comfort_level::comfortable ) {
+            who.add_msg_if_player( "You feel comfortable." );
+        } else if( comfort_info.level >= comfort_level::slightly_comfortable ) {
+            who.add_msg_if_player( "You feel slightly comfortable." );
+        } else {
+            who.add_msg_if_player( "You feel uncomfortable." );
+        }
     }
 
     return sleepy;

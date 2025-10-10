@@ -91,6 +91,12 @@ class avatar : public player
             save_id = id;
         }
 
+        /**
+        * Makes the avatar "take over" the given NPC, while the current avatar character
+        * becomes an NPC.
+        */
+        void control_npc( npc & );
+
         void toggle_map_memory();
         bool should_show_map_memory();
         void prepare_map_memory_region( const tripoint &p1, const tripoint &p2 );
@@ -170,7 +176,11 @@ class avatar : public player
         /** Note that we've read a book at least once. **/
         bool has_identified( const itype_id &item_id ) const;
 
-        void wake_up();
+        void add_snippet( snippet_id snippet );
+        bool has_seen_snippet( const snippet_id &snippet ) const;
+        const std::set<snippet_id> &get_snippets();
+
+        void wake_up() override;
         // Grab furniture / vehicle
         void grab( object_type grab_type, const tripoint &grab_point = tripoint_zero );
         object_type get_grab_type() const;
@@ -277,10 +287,18 @@ class avatar : public player
 
         /** Warnings from factions about bad behavior */
         std::map<faction_id, std::pair<int, time_point>> warning_record;
+        /**
+        * The NPC that would control the avatar's character in the avatar's absence.
+        * The Character data in this object is not relevant/used.
+        */
+        std::unique_ptr<npc> shadow_npc;
 
     public:
         // ---------------VALUES-----------------
         tripoint view_offset;
+
+        // Snippets the player has seen
+        std::set<snippet_id> snippets_read;
 
         bool random_start_location = false;
         start_location_id start_location;

@@ -59,7 +59,10 @@ enum spell_flag {
     NO_FAIL, // this spell cannot fail when you cast it
     BRAWL, // this spell can be used by brawlers
     DUPE_SOUND, // this spell will play 'duplicate' sounds, if relevant to the spell effect
-    ADD_MELEE_DAM, // Add melee damage to the spell's damage
+    ADD_MELEE_DAM, // Add melee damage to the spell's damage. Legacy method, "melee_dam" vector is preferred instead
+    PHYSICAL, // IMPLIES BRAWL. This spell is actually a Physical Technique / Weapon Arte / similar, and is sort-of a replacement of martial arts.
+    MOD_MELEE_MOVES, // Use melee attack cost as a base and add spell cost on top
+    MOD_MELEE_STAM, // Use melee stamina cost as a base and add spell cost on top
     LAST
 };
 
@@ -156,6 +159,12 @@ class spell_type
         // spell sound effect
         translation sound_description;
         skill_id skill;
+
+        // scale based on stats
+        bool scale_str;
+        bool scale_dex;
+        bool scale_per;
+        bool scale_int;
 
         // Mutations that block the spell from being cast
         std::set<trait_id> blocker_mutations;
@@ -287,6 +296,9 @@ class spell_type
 
         damage_type dmg_type = damage_type::DT_NULL;
 
+        // Melee damage types that the 'spell' uses
+        std::vector<damage_type> melee_dam;
+
         // list of valid targets to be affected by the area of effect.
         enum_bitset<valid_target> effect_targets;
 
@@ -337,6 +349,10 @@ class spell
         int min_leveled_aoe() const;
         // minimum duration including levels (moves)
         int min_leveled_duration() const;
+        // get the sum of the deltas of relevant stats away from 8
+        int get_stats_deltas( const Character &guy ) const;
+        // get the multiplier to spell stats from character stats
+        double get_stat_mult( bool decrease, const Character &guy ) const;
 
     public:
         spell() = default;
