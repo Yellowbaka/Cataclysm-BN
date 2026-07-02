@@ -2851,7 +2851,6 @@ void options_manager::add_options_debug()
 
     add_empty_line();
 
-
     add( "USE_LEGACY_PATHFINDING", debug,
          translate_marker( "Use legacy pathfinding" ),
          translate_marker( "If true, opt out of new pathfinding in favor of legacy one. This makes pathfinding mods not work." ),
