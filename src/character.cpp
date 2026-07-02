@@ -9335,11 +9335,7 @@ bool Character::armor_absorb( damage_unit &du, item &armor, const bodypart_id &b
 
     return armor.mod_damage( armor.has_flag( flag_FRAGILE ) ?
                              rng( 2 * itype::damage_scale, 3 * itype::damage_scale ) : itype::damage_scale, du.type );
-
-
 }
-
-
 
 float Character::bionic_armor_bonus( const bodypart_id &bp, damage_type dt ) const
 {
