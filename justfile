@@ -4,13 +4,13 @@ default:
     @just --list
 
 fmt *ARGS:
-    build-scripts/fmt.sh {{ARGS}}
+    build-scripts/fmt.sh {{ ARGS }}
 
 fmt-cpp *FILES:
-    build-scripts/fmt.sh cpp {{FILES}}
+    build-scripts/fmt.sh cpp {{ FILES }}
 
 fmt-json *FILES:
-    build-scripts/fmt.sh json {{FILES}}
+    build-scripts/fmt.sh json {{ FILES }}
 
 fmt-docs:
     build-scripts/fmt.sh docs
